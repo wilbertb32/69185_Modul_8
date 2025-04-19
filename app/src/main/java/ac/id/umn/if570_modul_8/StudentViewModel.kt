@@ -21,18 +21,22 @@ class StudentViewModel : ViewModel() {
         val studentMap = hashMapOf(
             "id" to student.id,
             "name" to student.name,
-            "program" to student.program,
-            "phones" to student.phones
+            "program" to student.program
         )
 
         db.collection("students")
             .add(studentMap)
-            .addOnSuccessListener {
-                Log.d("FireStore", "DocumentSnapshot added with ID: ${it.id}")
-                fetchStudents() // Refresh list
+            .addOnSuccessListener { docRef ->
+                Log.d("FireStore", "Student added with ID: ${docRef.id}")
+                // Tambahkan setiap nomor ke subcollection "phones"
+                student.phones.forEach { phone ->
+                    val phoneMap = hashMapOf("number" to phone)
+                    docRef.collection("phones").add(phoneMap)
+                }
+                fetchStudents() // Refresh Data
             }
             .addOnFailureListener { e ->
-                Log.w("Firestore", "Error adding document", e)
+                Log.w("Firestore", "Error adding student", e)
             }
     }
 
@@ -45,13 +49,25 @@ class StudentViewModel : ViewModel() {
                     val id = document.getString("id") ?: ""
                     val name = document.getString("name") ?: ""
                     val program = document.getString("program") ?: ""
-                    val phones = document.get("phones") as? List<String>?: emptyList()
-                    list.add(Student(id, name, program, phones))
+                    val docId = document.id
+
+                    // Ambil subcollection phones
+                    db.collection("students").document(docId).collection("phones")
+                        .get()
+                        .addOnSuccessListener { phoneResult ->
+                            val phones = phoneResult.mapNotNull { it.getString("number") }
+                            val student = Student(id, name, program, phones)
+                            list.add(student)
+                            students = list
+                        }
+                        .addOnFailureListener { e ->
+                            Log.w("Firestore", "Error getting phones", e)
+                        }
                 }
-                students = list
+
             }
             .addOnFailureListener { exception ->
-                Log.w("Firestore", "Error getting documents.", exception)
+                Log.w("Firestore", "Error getting students.", exception)
             }
     }
 }
